@@ -130,7 +130,8 @@ class RecSysEngine:
             if intent == 'rating':
                 place = result.get('place', 'Unknown Place')
                 rating = self.predict_rating(user_input, place)
-                return f"🤖 **Analysis:** Based on your vibe, I predict you'd give **{place}** a **{round(rating,2)}/5**."
+                rating = round(rating, 2)
+                return f"🤖 **Analysis:** Based on your vibe, I predict you'd give **{place}** a **{rating}/5**."
             
             elif intent == 'visit':
                 recs = self.predict_visit(user_input)
