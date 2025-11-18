@@ -5,7 +5,7 @@ import json
 import streamlit as st
 import os
 from gensim.models import Word2Vec
-import google.genai as genai
+import google.generativeai as genai
 
 
 # Define where your data lives

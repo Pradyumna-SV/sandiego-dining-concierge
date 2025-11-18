@@ -3,4 +3,4 @@ pandas
 numpy
 fastparquet
 gensim
-google-genai
+google-generativeai
