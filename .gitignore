@@ -1,0 +1,23 @@
+# 1. Security (NEVER UPLOAD THESE)
+.streamlit/secrets.toml
+.env
+api_keys.txt
+
+# 2. Massive Data Files (Too big for GitHub)
+*.gz
+*.zip
+*.csv
+# Only allow the specific small parquet/json files if you want
+# But generally, ignore raw data:
+data/raw/
+
+# 3. Python Junk (Not needed)
+__pycache__/
+*.pyc
+venv/
+.venv/
+env/
+
+# 4. Notebooks (Optional - if you don't want to push your messy experiments)
+*.ipynb
+.ipynb_checkpoints/
