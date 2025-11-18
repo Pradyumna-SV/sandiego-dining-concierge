@@ -2,4 +2,5 @@ streamlit
 pandas
 numpy
 fastparquet
+gensim
 google-generativeai
