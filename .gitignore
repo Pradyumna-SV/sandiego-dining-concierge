@@ -18,6 +18,3 @@ venv/
 .venv/
 env/
 
-# 4. Notebooks (Optional - if you don't want to push your messy experiments)
-*.ipynb
-.ipynb_checkpoints/
