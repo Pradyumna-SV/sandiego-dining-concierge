@@ -67,7 +67,7 @@ if prompt := st.chat_input("Type your question here..."):
         message_placeholder.markdown("Thinking...")
         
         # --- CALL YOUR ENGINE HERE ---
-        response = engine.generate_response(prompt)
+        response = engine.generate_response(prompt, st.session_state.messages)
         
         # Simulate typing effect (optional, but looks cool)
         # time.sleep(0.5) 
