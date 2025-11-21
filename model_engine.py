@@ -24,7 +24,7 @@ CONFIG = {
     "place_names": "data/place_names.npy",
     # LLM Configuration - defaults to Gemini
     "llm_provider": "gemini",  # Options: "gemini" or "openai"
-    "gemini_model": "gemini-2.0-flash-exp",
+    "gemini_model": "gemini-2.0-flash",
     "openai_model": "gpt-4o-mini"  # or "gpt-4o", "gpt-3.5-turbo"
 }
 
