@@ -1,0 +1,89 @@
+{
+  "processing_date": "2025-11-20T12:53:12.751211",
+  "source_files": {
+    "meta": "data/meta-California.json.gz",
+    "reviews": "data/review-California_10.json.gz"
+  },
+  "filters": {
+    "city": "San Diego",
+    "category": "Restaurant",
+    "full_california": false
+  },
+  "metadata": {
+    "total_places_scanned": 515961,
+    "valid_places_found": 1970,
+    "fields_available": [
+      "MISC",
+      "address",
+      "avg_rating",
+      "category",
+      "description",
+      "gmap_id",
+      "hours",
+      "latitude",
+      "longitude",
+      "name",
+      "num_of_reviews",
+      "price",
+      "relative_results",
+      "state",
+      "url"
+    ]
+  },
+  "reviews": {
+    "total_reviews_scanned": 44476890,
+    "valid_reviews_extracted": 290342,
+    "skipped_empty_text": 228373,
+    "fields_available": [
+      "gmap_id",
+      "name",
+      "pics",
+      "rating",
+      "resp",
+      "text",
+      "time",
+      "user_id"
+    ]
+  },
+  "final_dataset": {
+    "total_reviews": 290342,
+    "total_users": 102684,
+    "total_places": 1314,
+    "date_range": {
+      "earliest": "2006-06-06T00:00:00",
+      "latest": "2021-09-05T02:36:20.522000"
+    },
+    "rating_distribution": {
+      "1": 12204,
+      "2": 10316,
+      "3": 25365,
+      "4": 63673,
+      "5": 178784
+    },
+    "columns": [
+      "user_id",
+      "gmap_id",
+      "rating",
+      "text",
+      "timestamp",
+      "user_name",
+      "pics",
+      "num_pics",
+      "has_response",
+      "response_text",
+      "response_time",
+      "place_name",
+      "text_length",
+      "text_word_count",
+      "datetime",
+      "year",
+      "month",
+      "day_of_week",
+      "hour",
+      "is_positive",
+      "is_negative",
+      "has_photos"
+    ],
+    "sparsity": 0.997848151355814
+  }
+}
