@@ -63,26 +63,74 @@ SD_NEIGHBORHOODS = {
     'imperial beach': ['imperial beach', 'ib']
 }
 
-# Safe secrets check for both APIs
+# Common adjectives/descriptors for adjective incorporation
+ADJECTIVES = {
+    'salt', 'salty', 'salty,', 'salty.',
+    'grease', 'greasy', 'greasy,', 'greasy.',
+    'spicy', 'spice', 'spicy,', 'spicy.',
+    'sweet', 'sweet,', 'sweet.',
+    'sour', 'sour,',
+    'bitter', 'bitter,',
+    'fresh', 'fresh,', 'freshly',
+    'crispy', 'crispy,',
+    'creamy', 'creamy,',
+    'hot', 'hot,', 'hot.',
+    'cold', 'cold,',
+    'fried', 'fried,',
+    'grilled', 'grilled,',
+    'smoked', 'smoked,',
+    'tender', 'tender,',
+    'juicy', 'juicy,',
+    'cheesy', 'cheesy,',
+    'oily', 'oily,'
+}
+
+# Food-related nouns (for filtering adjective search results)
+FOOD_NOUNS = {
+    'taco', 'tacos', 'burger', 'burgers', 'pizza', 'pizzas',
+    'sushi', 'ramen', 'pho', 'pasta', 'noodles',
+    'sandwich', 'sandwiches', 'burrito', 'burritos',
+    'fries', 'wings', 'chicken', 'beef', 'pork', 'fish',
+    'salad', 'salads', 'soup', 'soups',
+    'steak', 'steaks', 'ribs', 'bbq', 'barbecue',
+    'enchilada', 'quesadilla',
+    'rice', 'beans', 'cheese', 'bacon', 'sausage',
+    'ice', 'cream', 'dessert', 'cake', 'pie',
+    'coffee', 'tea', 'beer', 'wine', 'cocktail',
+    'tortilla', 'bread', 'roll', 'rolls',
+    'mexican', 'italian', 'asian', 'japanese', 'chinese', 'thai', 'korean'
+}
+
+# Food context words that appear with adjectives
+FOOD_CONTEXT = {'food', 'dish', 'dish,', 'dish.', 'meal', 'plate', 'order', 'item', 'menu'}
+
+# Safe secrets check for both APIs (lazy loading - only check when needed)
+# Don't access st.secrets at module level to avoid conflicts with st.set_page_config()
 GEMINI_AVAILABLE = False
 OPENAI_AVAILABLE = False
 
-try:
-    if "GOOGLE_API_KEY" in st.secrets:
-        genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
-        GEMINI_AVAILABLE = True
-except:
-    pass
-
-try:
-    if OPENAI_IMPORTED and "OPENAI_API_KEY" in st.secrets:
-        OPENAI_AVAILABLE = True
-except:
-    pass
+def _check_api_availability():
+    """Lazily check API availability - only called after Streamlit is initialized"""
+    global GEMINI_AVAILABLE, OPENAI_AVAILABLE
+    try:
+        if "GOOGLE_API_KEY" in st.secrets:
+            genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
+            GEMINI_AVAILABLE = True
+    except:
+        pass
+    
+    try:
+        if OPENAI_IMPORTED and "OPENAI_API_KEY" in st.secrets:
+            OPENAI_AVAILABLE = True
+    except:
+        pass
 
 class RecSysEngine:
     def __init__(self):
         print("⚙️ Initializing RecSysEngine...")
+        
+        # Check API availability now (after Streamlit is initialized)
+        _check_api_availability()
         
         # Memory for Pronoun Resolution
         self.last_mentioned_place = None 
@@ -168,6 +216,88 @@ class RecSysEngine:
 
     def normalize_text(self, text):
         return re.sub(r'\W+', '', str(text)).lower()
+    
+    def _is_adjective(self, word):
+        """Check if word is likely an adjective/descriptor"""
+        word_lower = word.lower().strip('.,!?;:')
+        return word_lower in ADJECTIVES or word_lower.endswith('y') or word_lower.endswith('ed')
+    
+    def _find_food_items_from_adjective(self, adjective, topn=10):
+        """
+        Improved semantic search that finds food items associated with an adjective
+        instead of just similar words. Uses adjective incorporation technique.
+        
+        Strategy:
+        1. Try phrase combinations: adjective + food context words
+        2. Find words that are similar to the adjective but filter to food nouns
+        3. Find adjectives similar to our adjective, then find their associated food items
+        """
+        if not self.w2v:
+            return []
+        
+        results = []
+        adj_lower = adjective.lower().strip('.,!?;:')
+        
+        # Strategy 1: Phrase-based search - combine adjective with food context words
+        for context_word in FOOD_CONTEXT:
+            try:
+                if adj_lower in self.w2v.wv and context_word in self.w2v.wv:
+                    adj_vec = self.w2v.wv[adj_lower]
+                    ctx_vec = self.w2v.wv[context_word]
+                    # Combined embedding (weighted average)
+                    combined_vec = (adj_vec * 0.7 + ctx_vec * 0.3)
+                    
+                    # Find most similar words to this combined vector
+                    similar = self.w2v.wv.similar_by_vector(combined_vec, topn=topn)
+                    for word, score in similar:
+                        word_lower_clean = word.lower().strip('.,!?;:')
+                        if word_lower_clean in FOOD_NOUNS and word_lower_clean not in [r[0].lower() for r in results]:
+                            results.append((word_lower_clean, score))
+            except:
+                continue
+        
+        # Strategy 2: Find words similar to the adjective but filter to food nouns
+        try:
+            similar_words = self.w2v.wv.most_similar(adj_lower, topn=20)
+            for word, score in similar_words:
+                word_lower_clean = word.lower().strip('.,!?;:')
+                # Filter to food-related terms
+                if word_lower_clean in FOOD_NOUNS and word_lower_clean not in [r[0].lower() for r in results]:
+                    results.append((word_lower_clean, score))
+        except:
+            pass
+        
+        # Strategy 3: Find adjectives similar to our adjective, then find their associated food items
+        try:
+            similar_adjectives = self.w2v.wv.most_similar(adj_lower, topn=10)
+            for similar_adj, adj_score in similar_adjectives:
+                similar_adj_clean = similar_adj.lower().strip('.,!?;:')
+                if similar_adj_clean in ADJECTIVES:
+                    # Now find words similar to this similar adjective
+                    try:
+                        adj_similar = self.w2v.wv.most_similar(similar_adj, topn=10)
+                        for word, score in adj_similar:
+                            word_lower_clean = word.lower().strip('.,!?;:')
+                            if word_lower_clean in FOOD_NOUNS and word_lower_clean not in [r[0].lower() for r in results]:
+                                # Weight score by adjective similarity
+                                weighted_score = score * 0.7 + adj_score * 0.3
+                                results.append((word_lower_clean, weighted_score))
+                    except:
+                        continue
+        except:
+            pass
+        
+        # Remove duplicates and sort by score
+        seen = set()
+        unique_results = []
+        for word, score in results:
+            if word not in seen:
+                seen.add(word)
+                unique_results.append((word, score))
+        
+        # Sort by score descending and return top N
+        unique_results.sort(key=lambda x: x[1], reverse=True)
+        return [word for word, score in unique_results[:topn]]
     
     def _extract_neighborhood(self, address):
         """Extract neighborhood from address string"""
@@ -339,30 +469,131 @@ class RecSysEngine:
         
         if self.w2v:
             try:
-                core_noun = query_core.split()[-1]
-                similar = self.w2v.wv.most_similar(core_noun, topn=5)
-                for word, score in similar:
-                    if score > 0.5 and word.lower() not in self.stop_words:
-                        search_terms.add(word.lower())
-            except: pass
+                # Split query into words and check each
+                query_words = query_core.split()
+                for word in query_words:
+                    word_clean = word.lower().strip('.,!?;:')
+                    
+                    # Check if it's an adjective - use adjective incorporation
+                    if self._is_adjective(word_clean):
+                        food_items = self._find_food_items_from_adjective(word_clean, topn=5)
+                        for food_item in food_items:
+                            if food_item not in self.stop_words:
+                                search_terms.add(food_item)
+                    else:
+                        # Standard Word2Vec similarity for non-adjectives
+                        try:
+                            similar = self.w2v.wv.most_similar(word_clean, topn=5)
+                            for similar_word, score in similar:
+                                similar_word_clean = similar_word.lower().strip('.,!?;:')
+                                if score > 0.5 and similar_word_clean not in self.stop_words:
+                                    search_terms.add(similar_word_clean)
+                        except KeyError:
+                            # Word not in vocabulary, skip
+                            pass
+            except Exception as e:
+                # Fallback to simple approach if anything fails
+                try:
+                    core_noun = query_core.split()[-1]
+                    similar = self.w2v.wv.most_similar(core_noun, topn=5)
+                    for word, score in similar:
+                        if score > 0.5 and word.lower() not in self.stop_words:
+                            search_terms.add(word.lower())
+                except:
+                    pass
+        
+        # IMPORTANT: Apply explicit category expansions AFTER Word2Vec
+        # This ensures we have category terms even if adjective incorporation fails
         
         if "cheeseburger" in search_terms: search_terms.add("burger")
         if "taco" in search_terms: search_terms.add("mexican")
+        
+        # Normalize query_core for comparison (strip punctuation)
+        query_normalized = query_core.strip('.,!?;:')
+        
+        # Expand dessert-related terms for "sweet"
+        if "sweet" in query_normalized or "sweet" in query_core or any("sweet" in term for term in search_terms):
+            search_terms.update(['dessert', 'bakery', 'ice cream', 'ice', 'cream', 'cake', 'pie', 'candy', 'chocolate', 'pastry', 'sweets'])
+        
+        # Expand greasy-related terms (fast food, burgers, fries, fried food)
+        if "greasy" in query_normalized or "greasy" in query_core or any("greasy" in term for term in search_terms):
+            # Add multiple variations to catch different category formats
+            search_terms.update(['fast food', 'fast', 'burger', 'burgers', 'fries', 'fried', 'american', 'bbq', 'barbecue', 'wings', 'chicken'])
+        
+        # Expand salty-related terms (bar food, snacks, pretzels)
+        if "salty" in query_normalized or "salt" in query_normalized or "salty" in query_core or "salt" in query_core or any("salt" in term for term in search_terms):
+            search_terms.update(['bar', 'pub', 'snacks', 'american', 'fast food', 'pretzel', 'chips', 'sports bar'])
+        
+        # Expand spicy-related terms
+        if "spicy" in query_core or any("spicy" in term for term in search_terms):
+            search_terms.update(['mexican', 'thai', 'indian', 'korean', 'szechuan', 'curry', 'asian'])
+        
+        # Expand savory-related terms
+        if "savory" in query_core or any("savory" in term for term in search_terms):
+            search_terms.update(['steak', 'steaks', 'bbq', 'barbecue', 'meat', 'grill', 'american', 'italian'])
+        
+        # Remove "food" from search terms if it's too generic (it matches everything)
+        # Only keep "food" if it's the ONLY search term (then we show top-rated places)
+        if "food" in search_terms and len(search_terms) > 1:
+            search_terms.discard("food")  # Remove generic "food" term if we have specific terms
+        
+        # Debug: print search terms being used (comment out in production)
+        # print(f"DEBUG: Search terms for '{query_core}': {search_terms}")
 
         if self.meta_data.empty: return []
 
         def score_place(row):
             score = 0
-            name = str(row['name']).lower()
-            cats = row['cat_str']
+            name = str(row.get('name', '')).lower()
+            cats = str(row.get('cat_str', '')).lower()
+            
+            # Also check raw categories column if it exists
+            raw_cats = row.get('categories', [])
+            if isinstance(raw_cats, list):
+                cats_list_str = ' '.join(str(c).lower() for c in raw_cats)
+            else:
+                cats_list_str = str(raw_cats).lower() if raw_cats else ''
+            
+            # Combine all category strings
+            all_cats = f"{cats} {cats_list_str}".lower()
+            
             for term in search_terms:
-                if term in cats: score += 5
-                if term in name: score += 3
+                term_lower = term.lower()
+                # Exact category match (strong signal)
+                if term_lower in all_cats:
+                    score += 5
+                # Multi-word terms (e.g., "fast food") - check if all words appear
+                if ' ' in term_lower:
+                    words = term_lower.split()
+                    if all(word in all_cats for word in words):
+                        score += 5
+                # Name match (weaker signal, but still useful)
+                if term_lower in name:
+                    score += 3
+                # Partial word match in categories (e.g., "dessert" matches "desserts")
+                # Check if term is part of category words or vice versa
+                for cat_word in all_cats.split():
+                    if term_lower in cat_word or cat_word in term_lower:
+                        if len(term_lower) > 3 and len(cat_word) > 3:  # Only for substantial words
+                            score += 3
+            
             return score
 
         # Score all places first
         self.meta_data['search_score'] = self.meta_data.apply(score_place, axis=1)
         results = self.meta_data[self.meta_data['search_score'] > 0].copy()
+        
+        # If no results, try a more lenient search (just name matching)
+        if results.empty:
+            for term in search_terms:
+                term_lower = term.lower()
+                name_matches = self.meta_data[
+                    self.meta_data['name'].astype(str).str.lower().str.contains(term_lower, na=False)
+                ]
+                if not name_matches.empty:
+                    results = name_matches.copy()
+                    results['search_score'] = 1  # Low score for name-only matches
+                    break
         
         # If location specified, try location-specific results first
         if location:
@@ -392,9 +623,24 @@ class RecSysEngine:
         # Fallback or no location specified - use all results
         if results.empty and len(query_core.split()) > 1:
             return self.predict_visit(query_core.split()[-1], location)
+        
+        # If still no results, try one more fallback based on the query
+        if results.empty:
+            # If query was just "food", return top-rated restaurants
+            if query_core.strip() == "food":
+                if 'avg_rating' in self.meta_data.columns:
+                    top_rated = self.meta_data.nlargest(5, 'avg_rating')
+                    return top_rated['name'].tolist()
+            # Otherwise, try searching with just the main keyword (last word)
+            elif len(query_core.split()) > 1:
+                return self.predict_visit(query_core.split()[-1], location)
+            # Last resort: return empty (don't show random restaurants)
+            return []
 
         if 'avg_rating' in results.columns:
             results = results.sort_values(['search_score', 'avg_rating'], ascending=[False, False])
+        else:
+            results = results.sort_values('search_score', ascending=False)
         
         return results['name'].head(5).tolist()
 
@@ -432,7 +678,51 @@ class RecSysEngine:
     def generate_response(self, user_input, history=[]):
         # Check if any LLM is available
         if not self.gemini and not self.openai_client:
-            return "❌ **No LLM API configured.** Add GOOGLE_API_KEY or OPENAI_API_KEY to `.streamlit/secrets.toml`"
+            # Fallback: Use direct search without LLM for testing
+            # Try to detect if this is a search query (contains food-related keywords)
+            query_lower = user_input.lower()
+            food_keywords = ['greasy', 'salty', 'spicy', 'crispy', 'sweet', 'fresh', 'creamy', 
+                            'food', 'restaurant', 'find', 'where', 
+                            'taco', 'burger', 'pizza', 'sushi', 'search', 'recommend', 'dessert']
+            
+            # Also check if any word is an adjective
+            query_words = query_lower.split()
+            has_adjective = any(self._is_adjective(word.strip('.,!?;:')) for word in query_words)
+            
+            # Always try direct search for food-related queries (including adjectives)
+            if any(keyword in query_lower for keyword in food_keywords) or has_adjective:
+                # Direct search mode - no LLM needed
+                result_names = self.predict_visit(user_input)
+                if result_names:
+                    response = f"🔍 **Search Results for '{user_input}':**\n\n"
+                    for i, place_name in enumerate(result_names[:5], 1):
+                        # Get details for each restaurant
+                        details = self.get_place_details(place_name)
+                        if details:
+                            name = details.get('name', place_name)
+                            rating = details.get('avg_rating', 'N/A')
+                            cats = details.get('categories', [])
+                            if isinstance(cats, list):
+                                cat_str = ', '.join(str(c) for c in cats[:3]) if cats else ''
+                            else:
+                                cat_str = str(cats) if cats else ''
+                            
+                            response += f"{i}. **{name}**\n"
+                            if rating != 'N/A':
+                                response += f"   ⭐ {rating:.1f}/5.0"
+                            if cat_str:
+                                response += f" • {cat_str}"
+                            response += "\n\n"
+                        else:
+                            # Fallback if details not found
+                            response += f"{i}. **{place_name}**\n\n"
+                    
+                    response += "\n💡 *Note: LLM API not configured. Add API keys to `.streamlit/secrets.toml` for conversational features.*"
+                    return response
+                else:
+                    return f"❌ No results found for '{user_input}'. Try different keywords.\n\n💡 *Note: LLM API not configured. Add API keys to `.streamlit/secrets.toml` for better search.*"
+            
+            return "❌ **No LLM API configured.** Add GOOGLE_API_KEY or OPENAI_API_KEY to `.streamlit/secrets.toml`\n\n💡 *Tip: Try queries like 'greasy food' or 'spicy' to test search without LLM.*"
         
         # Build conversation context
         recent_messages = []

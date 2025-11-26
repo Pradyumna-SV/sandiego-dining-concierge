@@ -339,6 +339,7 @@ This loads the trained models and provides an interactive chat interface for tes
 #### **Section 2: Data Loading & EDA** (Lines 35-680)
 - Imports from `preprocess.py` (single source)
 - Displays dataset statistics (290K reviews, 1.3K restaurants, 102K users)
+- Data quality analysis (missing data, duplicates, rating validation)
 - **12+ Visualizations**:
   - Rating distribution histogram
   - Review length vs rating scatter
@@ -358,11 +359,14 @@ This loads the trained models and provides an interactive chat interface for tes
 #### **Section 4: Evaluation** (Lines 843-1362)
 - Train/test split (80/20)
 - Baseline comparisons (Global/User/Item avg)
+- Popularity-based baseline (4th baseline model)
+- Multi-metric evaluation (MAE, R², MAPE) with comparison visualizations
+- Error distribution analysis (box plots, violin plots)
+- Cold-start and unexpected results analysis with visualizations
 - RMSE calculations for all models
 - Active vs casual user segmentation
 - Statistical significance testing (paired t-tests)
 - Bootstrap confidence intervals (1000 samples)
-- Error distribution visualizations
 - Semantic search qualitative evaluation
 
 #### **Section 5: Discussion** (Lines 1363-1744)
